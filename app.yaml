@@ -1,0 +1,41 @@
+command: ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
+
+env:
+  - name: SUPERVISOR_ENDPOINT
+    value: "mas-d45b0de3-endpoint"
+  - name: KA_ENDPOINT
+    value: "ka-77835fba-endpoint"
+  - name: GENIE_SPACE_ID
+    value: "01f13a85f3dd12ba954cc350e5092f74"
+  - name: VOLUME_ROOT
+    value: "/Volumes/research_assistant_demo/default/research_pdfs"
+  - name: DATABRICKS_WAREHOUSE_ID
+    valueFrom: "warehouse"
+
+resources:
+  - name: "warehouse"
+    sql_warehouse:
+      id: "8baced1ff014912d"
+      permission: "CAN_USE"
+  - name: "supervisor"
+    serving_endpoint:
+      name: "mas-d45b0de3-endpoint"
+      permission: "CAN_QUERY"
+  - name: "knowledge_assistant"
+    serving_endpoint:
+      name: "ka-77835fba-endpoint"
+      permission: "CAN_QUERY"
+  - name: "genie_space"
+    genie_space:
+      id: "01f13a85f3dd12ba954cc350e5092f74"
+      permission: "CAN_RUN"
+  - name: "report_metadata"
+    uc_securable:
+      securable_full_name: "research_assistant_demo.default.report_metadata"
+      securable_type: "TABLE"
+      permission: "SELECT"
+  - name: "research_pdfs"
+    uc_securable:
+      securable_full_name: "research_assistant_demo.default.research_pdfs"
+      securable_type: "VOLUME"
+      permission: "READ_VOLUME"

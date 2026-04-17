@@ -1,0 +1,40 @@
+resources:
+  apps:
+    research_assistant:
+      name: research-assistant
+      description: Multi-agent research assistant chat UI (Genie + Knowledge Assistant via Agent Bricks Supervisor)
+      source_code_path: ./
+      resources:
+        - name: warehouse
+          description: SQL warehouse for the /api/metadata endpoint
+          sql_warehouse:
+            id: ${var.warehouse_id}
+            permission: CAN_USE
+        - name: supervisor
+          description: Multi-Agent Supervisor endpoint
+          serving_endpoint:
+            name: ${var.supervisor_endpoint}
+            permission: CAN_QUERY
+        - name: knowledge_assistant
+          description: Knowledge Assistant endpoint (direct route)
+          serving_endpoint:
+            name: ${var.ka_endpoint}
+            permission: CAN_QUERY
+        - name: genie_space
+          description: Genie space (exposed via supervisor)
+          genie_space:
+            name: research-metadata-genie
+            space_id: ${var.genie_space_id}
+            permission: CAN_RUN
+        - name: report_metadata
+          description: Report metadata table
+          uc_securable:
+            securable_full_name: ${var.catalog}.${var.schema}.${var.metadata_table}
+            securable_type: TABLE
+            permission: SELECT
+        - name: research_pdfs
+          description: PDFs volume
+          uc_securable:
+            securable_full_name: ${var.catalog}.${var.schema}.${var.volume}
+            securable_type: VOLUME
+            permission: READ_VOLUME

@@ -1,0 +1,77 @@
+resources:
+  jobs:
+    bootstrap:
+      name: research-assistant-bootstrap
+      description: One-shot job that provisions UC assets, extracts metadata, and creates Genie / Knowledge Assistant / Multi-Agent Supervisor. Idempotent — re-run to update.
+      tasks:
+        - task_key: setup_uc
+          spark_python_task:
+            python_file: ../bundle/setup_uc.py
+            parameters:
+              - --catalog=${var.catalog}
+              - --schema=${var.schema}
+              - --volume=${var.volume}
+              - --metadata-table=${var.metadata_table}
+              - --warehouse-id=${var.warehouse_id}
+          environment_key: default
+        - task_key: extract_metadata
+          depends_on:
+            - task_key: setup_uc
+          spark_python_task:
+            python_file: ../bundle/extract_metadata.py
+            parameters:
+              - --catalog=${var.catalog}
+              - --schema=${var.schema}
+              - --volume=${var.volume}
+              - --metadata-table=${var.metadata_table}
+              - --warehouse-id=${var.warehouse_id}
+          environment_key: default
+        - task_key: create_agent_bricks
+          depends_on:
+            - task_key: extract_metadata
+          spark_python_task:
+            python_file: ../bundle/create_agent_bricks.py
+            parameters:
+              - --catalog=${var.catalog}
+              - --schema=${var.schema}
+              - --volume=${var.volume}
+              - --metadata-table=${var.metadata_table}
+          environment_key: default
+      environments:
+        - environment_key: default
+          spec:
+            client: "2"
+            dependencies:
+              - databricks-sdk>=0.102
+              - httpx>=0.27
+
+    reindex:
+      name: research-assistant-reindex
+      description: Re-run after dropping new PDFs into the volume. Refreshes metadata and nudges the KA to re-index.
+      tasks:
+        - task_key: extract_metadata
+          spark_python_task:
+            python_file: ../bundle/extract_metadata.py
+            parameters:
+              - --catalog=${var.catalog}
+              - --schema=${var.schema}
+              - --volume=${var.volume}
+              - --metadata-table=${var.metadata_table}
+              - --warehouse-id=${var.warehouse_id}
+          environment_key: default
+        - task_key: resync_ka
+          depends_on:
+            - task_key: extract_metadata
+          spark_python_task:
+            python_file: ../bundle/resync_ka.py
+            parameters:
+              - --catalog=${var.catalog}
+              - --schema=${var.schema}
+              - --volume=${var.volume}
+          environment_key: default
+      environments:
+        - environment_key: default
+          spec:
+            client: "2"
+            dependencies:
+              - databricks-sdk>=0.102

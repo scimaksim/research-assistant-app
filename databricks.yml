@@ -1,0 +1,55 @@
+bundle:
+  name: research-assistant
+
+variables:
+  catalog:
+    description: Unity Catalog to hold research PDFs and metadata. Must already exist with USE_CATALOG for the deployer.
+    default: research_assistant_demo
+  schema:
+    description: Schema under the catalog.
+    default: default
+  volume:
+    description: Managed volume holding PDFs.
+    default: research_pdfs
+  metadata_table:
+    description: Table populated by ai_extract with one row per PDF.
+    default: report_metadata
+  warehouse_id:
+    description: Serverless SQL warehouse used for ai_extract and Genie.
+    default: 8baced1ff014912d
+  supervisor_endpoint:
+    description: Multi-Agent Supervisor serving endpoint. Populated by bootstrap job output.
+    default: ""
+  ka_endpoint:
+    description: Knowledge Assistant serving endpoint. Populated by bootstrap job output.
+    default: ""
+  genie_space_id:
+    description: Genie space id. Populated by bootstrap job output.
+    default: ""
+
+include:
+  - resources/*.yml
+
+sync:
+  include:
+    - static/**
+    - app.py
+    - app.yaml
+    - requirements.txt
+
+targets:
+  dev:
+    mode: development
+    default: true
+    workspace:
+      host: https://e2-demo-field-eng.cloud.databricks.com
+    variables:
+      catalog: research_assistant_demo
+      supervisor_endpoint: mas-d45b0de3-endpoint
+      ka_endpoint: ka-77835fba-endpoint
+      genie_space_id: 01f13a85f3dd12ba954cc350e5092f74
+
+  prod:
+    mode: production
+    workspace:
+      host: https://e2-demo-field-eng.cloud.databricks.com

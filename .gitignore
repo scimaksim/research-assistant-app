@@ -1,0 +1,11 @@
+.databricks/
+__pycache__/
+*.pyc
+.venv/
+venv/
+.env
+.env.*
+*.pdf
+/tmp/
+.DS_Store
+eval/latest_results.json
