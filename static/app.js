@@ -5,6 +5,9 @@ const routeSel = document.getElementById("route");
 const citationsEl = document.getElementById("citations");
 const citationsCount = document.getElementById("citations-count");
 const composer = document.getElementById("composer");
+const compareBtn = document.getElementById("compare-btn");
+const compareOverlay = document.getElementById("compare-overlay");
+const compareRow = document.getElementById("compare-row");
 
 const history = [];
 
@@ -51,6 +54,62 @@ function addBubble(role, html, extraClass = "") {
 }
 
 let currentCitations = [];
+let currentQuery = "";
+
+function buildCitationCard(c, num, userQuery) {
+  const card = document.createElement("div");
+  card.className = `cite${c.synthesized ? " cite-synth" : ""}`;
+  card.id = `cite-${num}`;
+  const title = reportTitle(c);
+  const pageTag = c.page != null ? `<span class="page-tag">page ${escapeHtml(c.page)}</span>` : "";
+  const secTag = c.section ? `<span class="sec-tag">§ ${escapeHtml(c.section)}</span>` : "";
+  const synthTag = c.synthesized ? '<span class="synth-tag" title="Extracted from answer text">inferred</span>' : "";
+  const pdfHref = c.volume_url || c.doc_uri;
+  const pdfLink = pdfHref
+    ? `<a class="pdf-link" href="${encodeURI(pdfHref)}" target="_blank" rel="noreferrer">Open PDF${c.page != null ? ` at page ${escapeHtml(c.page)}` : ""} ↗</a>`
+    : "";
+  const snippet = highlight(c.snippet || "", userQuery);
+  const bodyHtml = c.synthesized
+    ? `<div class="snippet"><em>Referenced in the answer. No retrieval snippet — this answer came from the metadata route (Genie). Open the PDF to read the full report.</em></div>`
+    : `<div>${pageTag}${secTag}</div><div class="snippet">${snippet || "<em>(no snippet)</em>"}</div>`;
+  card.innerHTML = `
+    <div class="cite-head">
+      <span class="num-badge">${num}</span>
+      <div class="title">${escapeHtml(title)}${synthTag}</div>
+    </div>
+    <div class="cite-body">
+      ${bodyHtml}
+    </div>
+    <div class="cite-foot">
+      <span>${c.report_id ? `<code>${escapeHtml(c.report_id)}</code>` : ""}</span>
+      ${pdfLink}
+    </div>
+  `;
+  return card;
+}
+
+function openCompare() {
+  if (!currentCitations.length) return;
+  compareRow.innerHTML = "";
+  currentCitations.forEach((c, i) => {
+    compareRow.appendChild(buildCitationCard(c, i + 1, currentQuery));
+  });
+  compareOverlay.hidden = false;
+  document.body.style.overflow = "hidden";
+}
+
+function closeCompare() {
+  compareOverlay.hidden = true;
+  document.body.style.overflow = "";
+}
+
+compareBtn.addEventListener("click", openCompare);
+compareOverlay.addEventListener("click", (e) => {
+  if (e.target.dataset.close === "1") closeCompare();
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !compareOverlay.hidden) closeCompare();
+});
 
 function renderAnswer(text) {
   // Markdown -> sanitized HTML, then turn [1] / [2] into clickable citation refs
@@ -69,43 +128,18 @@ function renderAnswer(text) {
 
 function renderCitations(cits, userQuery) {
   currentCitations = cits || [];
-  citationsCount.textContent = cits && cits.length ? `${cits.length} source${cits.length > 1 ? "s" : ""}` : "";
-  if (!cits || cits.length === 0) {
+  currentQuery = userQuery || "";
+  const n = currentCitations.length;
+  citationsCount.textContent = n ? `${n} source${n > 1 ? "s" : ""}` : "";
+  compareBtn.disabled = n < 2;
+  compareBtn.title = n < 2 ? "Compare requires 2 or more sources" : "Open side-by-side comparison";
+  if (!n) {
     citationsEl.innerHTML = '<p class="empty">Ask a content question (gold forecast, sector views, summaries) and citations will appear here — report, page, section, paragraph — so you can visually verify the answer.</p>';
     return;
   }
   citationsEl.innerHTML = "";
-  cits.forEach((c, i) => {
-    const num = i + 1;
-    const card = document.createElement("div");
-    card.className = `cite${c.synthesized ? " cite-synth" : ""}`;
-    card.id = `cite-${num}`;
-    const title = reportTitle(c);
-    const pageTag = c.page != null ? `<span class="page-tag">page ${escapeHtml(c.page)}</span>` : "";
-    const secTag = c.section ? `<span class="sec-tag">§ ${escapeHtml(c.section)}</span>` : "";
-    const synthTag = c.synthesized ? '<span class="synth-tag" title="Extracted from answer text">inferred</span>' : "";
-    const pdfHref = c.volume_url || c.doc_uri;
-    const pdfLink = pdfHref
-      ? `<a class="pdf-link" href="${encodeURI(pdfHref)}" target="_blank" rel="noreferrer">Open PDF${c.page != null ? ` at page ${escapeHtml(c.page)}` : ""} ↗</a>`
-      : "";
-    const snippet = highlight(c.snippet || "", userQuery);
-    const bodyHtml = c.synthesized
-      ? `<div class="snippet"><em>Referenced in the answer. No retrieval snippet — this answer came from the metadata route (Genie). Open the PDF to read the full report.</em></div>`
-      : `<div>${pageTag}${secTag}</div><div class="snippet">${snippet || "<em>(no snippet)</em>"}</div>`;
-    card.innerHTML = `
-      <div class="cite-head">
-        <span class="num-badge">${num}</span>
-        <div class="title">${escapeHtml(title)}${synthTag}</div>
-      </div>
-      <div class="cite-body">
-        ${bodyHtml}
-      </div>
-      <div class="cite-foot">
-        <span>${c.report_id ? `<code>${escapeHtml(c.report_id)}</code>` : ""}</span>
-        ${pdfLink}
-      </div>
-    `;
-    citationsEl.appendChild(card);
+  currentCitations.forEach((c, i) => {
+    citationsEl.appendChild(buildCitationCard(c, i + 1, userQuery));
   });
 }
 

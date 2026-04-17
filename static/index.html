@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Research Assistant</title>
-  <link rel="stylesheet" href="/static/style.css" />
+  <link rel="stylesheet" href="/static/style.css?v=3" />
 </head>
 <body>
   <header>
@@ -46,7 +46,10 @@
     <aside id="citations-panel">
       <header>
         <h2>Sources</h2>
-        <span class="count" id="citations-count"></span>
+        <div class="panel-actions">
+          <button id="compare-btn" class="compare-btn" type="button" disabled title="Open side-by-side comparison">Compare</button>
+          <span class="count" id="citations-count"></span>
+        </div>
       </header>
       <div id="citations" class="citations">
         <p class="empty">Ask a content question (gold forecast, sector views, summaries) and citations will appear here — report, page, section, paragraph — so you can visually verify the answer.</p>
@@ -54,8 +57,19 @@
     </aside>
   </main>
 
+  <div id="compare-overlay" class="compare-overlay" hidden>
+    <div class="compare-backdrop" data-close="1"></div>
+    <div class="compare-modal" role="dialog" aria-modal="true" aria-labelledby="compare-title">
+      <header class="compare-head">
+        <h2 id="compare-title">Compare sources</h2>
+        <button class="compare-close" type="button" data-close="1" aria-label="Close">✕</button>
+      </header>
+      <div id="compare-row" class="compare-row"></div>
+    </div>
+  </div>
+
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
-  <script src="/static/app.js"></script>
+  <script src="/static/app.js?v=3"></script>
 </body>
 </html>
