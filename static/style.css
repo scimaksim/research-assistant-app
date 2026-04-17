@@ -282,3 +282,68 @@ main {
   #citations-panel { order: 2; max-height: 60vh; }
   .messages { max-height: 55vh; }
 }
+
+/* Markdown rendering inside chat bubbles */
+.bubble.assistant p { margin: 6px 0; }
+.bubble.assistant p:first-child { margin-top: 0; }
+.bubble.assistant p:last-child { margin-bottom: 0; }
+.bubble.assistant h1,
+.bubble.assistant h2,
+.bubble.assistant h3,
+.bubble.assistant h4 {
+  margin: 10px 0 4px;
+  font-weight: 600;
+  color: var(--text);
+}
+.bubble.assistant h1 { font-size: 16px; }
+.bubble.assistant h2 { font-size: 15px; }
+.bubble.assistant h3 { font-size: 14px; }
+.bubble.assistant h4 { font-size: 13px; color: var(--muted); }
+.bubble.assistant ul,
+.bubble.assistant ol { margin: 4px 0 6px; padding-left: 22px; }
+.bubble.assistant li { margin: 2px 0; }
+.bubble.assistant strong { color: var(--text); font-weight: 600; }
+.bubble.assistant code {
+  background: rgba(255,255,255,0.06);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 12.5px;
+}
+.bubble.assistant pre {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px;
+  overflow-x: auto;
+  font-size: 12.5px;
+}
+.bubble.assistant pre code { background: transparent; padding: 0; }
+.bubble.assistant hr { border: 0; border-top: 1px solid var(--border); margin: 8px 0; }
+.bubble.assistant blockquote {
+  border-left: 3px solid var(--accent);
+  margin: 6px 0;
+  padding: 2px 10px;
+  color: var(--muted);
+}
+.bubble.assistant table { border-collapse: collapse; margin: 6px 0; }
+.bubble.assistant th, .bubble.assistant td {
+  border: 1px solid var(--border);
+  padding: 4px 8px;
+  font-size: 12.5px;
+}
+
+/* Inferred citation card (no retrieval snippet — just a link to the PDF) */
+.cite.cite-synth { opacity: 0.92; }
+.cite.cite-synth .title .synth-tag {
+  background: var(--panel-2);
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 1px 8px;
+  font-size: 10px;
+  margin-left: 8px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+.cite.cite-synth .snippet { color: var(--muted); font-style: italic; }

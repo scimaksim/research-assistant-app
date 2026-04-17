@@ -15,6 +15,7 @@ SUPERVISOR_ENDPOINT = os.environ.get("SUPERVISOR_ENDPOINT", "mas-d45b0de3-endpoi
 KA_ENDPOINT = os.environ.get("KA_ENDPOINT", "ka-77835fba-endpoint")
 GENIE_SPACE_ID = os.environ.get("GENIE_SPACE_ID", "01f13a85f3dd12ba954cc350e5092f74")
 WAREHOUSE_ID = os.environ.get("DATABRICKS_WAREHOUSE_ID", "8baced1ff014912d")
+VOLUME_ROOT = os.environ.get("VOLUME_ROOT", "/Volumes/research_assistant_demo/default/research_pdfs")
 
 w = WorkspaceClient()
 HOST = w.config.host.rstrip("/")
@@ -184,6 +185,31 @@ def health() -> dict[str, Any]:
     }
 
 
+def _synthesize_citations_from_answer(answer: str) -> list[dict[str, Any]]:
+    """If the model replies with an answer that mentions report_ids but returns
+    no url_citation annotations (typical for the Supervisor → Genie path),
+    surface those report_ids as lightweight citation cards pointing at the PDF."""
+    seen: set[str] = set()
+    out: list[dict[str, Any]] = []
+    for m in re.finditer(r"\b(\d{8}R\d+)\b", answer or ""):
+        rid = m.group(1)
+        if rid in seen:
+            continue
+        seen.add(rid)
+        doc_uri = f"{VOLUME_ROOT.rstrip('/')}/{rid}.pdf"
+        out.append({
+            "doc_uri": doc_uri,
+            "report_id": rid,
+            "page": None,
+            "section": None,
+            "snippet": "",
+            "volume_url": _volume_browser_url(doc_uri, None),
+            "title": "",
+            "synthesized": True,
+        })
+    return out
+
+
 @app.post("/api/chat")
 def chat(req: ChatRequest) -> dict[str, Any]:
     if req.route == "knowledge":
@@ -194,7 +220,10 @@ def chat(req: ChatRequest) -> dict[str, Any]:
     payload = {"input": _build_input(req)}
     resp = _query_endpoint(endpoint, payload)
     parsed = _parse_response(resp)
-    return {"answer": parsed["answer"], "citations": parsed["citations"], "endpoint": endpoint}
+    citations = parsed["citations"]
+    if not citations:
+        citations = _synthesize_citations_from_answer(parsed["answer"])
+    return {"answer": parsed["answer"], "citations": citations, "endpoint": endpoint}
 
 
 @app.get("/api/metadata/latest")

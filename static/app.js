@@ -52,9 +52,13 @@ function addBubble(role, html, extraClass = "") {
 
 let currentCitations = [];
 
-function linkifyCitations(text) {
-  // Replace [1], [2] etc. with anchor tags that scroll to the citation card
-  return escapeHtml(text).replace(/\[(\d+)\]/g, (match, num) => {
+function renderAnswer(text) {
+  // Markdown -> sanitized HTML, then turn [1] / [2] into clickable citation refs
+  const raw = typeof marked !== "undefined"
+    ? marked.parse(text, { breaks: true, gfm: true })
+    : escapeHtml(text).replace(/\n/g, "<br>");
+  const clean = typeof DOMPurify !== "undefined" ? DOMPurify.sanitize(raw) : raw;
+  return clean.replace(/\[(\d+)\]/g, (match, num) => {
     const n = parseInt(num, 10);
     if (n >= 1 && n <= currentCitations.length) {
       return `<a class="cite-ref" href="#cite-${n}" data-cite="${n}">${n}</a>`;
@@ -74,24 +78,27 @@ function renderCitations(cits, userQuery) {
   cits.forEach((c, i) => {
     const num = i + 1;
     const card = document.createElement("div");
-    card.className = "cite";
+    card.className = `cite${c.synthesized ? " cite-synth" : ""}`;
     card.id = `cite-${num}`;
     const title = reportTitle(c);
     const pageTag = c.page != null ? `<span class="page-tag">page ${escapeHtml(c.page)}</span>` : "";
     const secTag = c.section ? `<span class="sec-tag">§ ${escapeHtml(c.section)}</span>` : "";
+    const synthTag = c.synthesized ? '<span class="synth-tag" title="Extracted from answer text">inferred</span>' : "";
     const pdfHref = c.volume_url || c.doc_uri;
     const pdfLink = pdfHref
       ? `<a class="pdf-link" href="${encodeURI(pdfHref)}" target="_blank" rel="noreferrer">Open PDF${c.page != null ? ` at page ${escapeHtml(c.page)}` : ""} ↗</a>`
       : "";
     const snippet = highlight(c.snippet || "", userQuery);
+    const bodyHtml = c.synthesized
+      ? `<div class="snippet"><em>Referenced in the answer. No retrieval snippet — this answer came from the metadata route (Genie). Open the PDF to read the full report.</em></div>`
+      : `<div>${pageTag}${secTag}</div><div class="snippet">${snippet || "<em>(no snippet)</em>"}</div>`;
     card.innerHTML = `
       <div class="cite-head">
         <span class="num-badge">${num}</span>
-        <div class="title">${escapeHtml(title)}</div>
+        <div class="title">${escapeHtml(title)}${synthTag}</div>
       </div>
       <div class="cite-body">
-        <div>${pageTag}${secTag}</div>
-        <div class="snippet">${snippet || "<em>(no snippet)</em>"}</div>
+        ${bodyHtml}
       </div>
       <div class="cite-foot">
         <span>${c.report_id ? `<code>${escapeHtml(c.report_id)}</code>` : ""}</span>
@@ -129,7 +136,7 @@ async function sendMessage(text) {
 
     const cits = data.citations || [];
     currentCitations = cits;
-    const answerHtml = linkifyCitations(data.answer || "(no content)");
+    const answerHtml = renderAnswer(data.answer || "(no content)");
     addBubble("assistant", answerHtml);
     history.push({ role: "assistant", content: data.answer || "" });
     renderCitations(cits, text);
