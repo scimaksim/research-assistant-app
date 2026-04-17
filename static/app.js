@@ -65,8 +65,12 @@ function buildCitationCard(c, num, userQuery) {
   const secTag = c.section ? `<span class="sec-tag">§ ${escapeHtml(c.section)}</span>` : "";
   const synthTag = c.synthesized ? '<span class="synth-tag" title="Extracted from answer text">inferred</span>' : "";
   const pdfHref = c.volume_url || c.doc_uri;
+  const proxyPath = c.doc_uri || "";
+  const viewBtn = proxyPath && !c.synthesized
+    ? `<button class="pdf-view" type="button" data-path="${encodeURI(proxyPath)}" data-page="${c.page != null ? escapeHtml(c.page) : ""}" data-snippet="${escapeHtml(c.snippet || "")}" data-title="${escapeHtml(reportTitle(c))}" data-ext="${pdfHref ? encodeURI(pdfHref) : ""}">View page</button>`
+    : "";
   const pdfLink = pdfHref
-    ? `<a class="pdf-link" href="${encodeURI(pdfHref)}" target="_blank" rel="noreferrer">Open PDF${c.page != null ? ` at page ${escapeHtml(c.page)}` : ""} ↗</a>`
+    ? `<a class="pdf-link" href="${encodeURI(pdfHref)}" target="_blank" rel="noreferrer">Open in Databricks${c.page != null ? ` at page ${escapeHtml(c.page)}` : ""} ↗</a>`
     : "";
   const snippet = highlight(c.snippet || "", userQuery);
   const bodyHtml = c.synthesized
@@ -82,7 +86,7 @@ function buildCitationCard(c, num, userQuery) {
     </div>
     <div class="cite-foot">
       <span>${c.report_id ? `<code>${escapeHtml(c.report_id)}</code>` : ""}</span>
-      ${pdfLink}
+      <span class="cite-foot-actions">${viewBtn}${pdfLink}</span>
     </div>
   `;
   return card;
@@ -227,15 +231,35 @@ inputEl.addEventListener("keydown", (e) => {
 // Click a [1] reference in answer -> scroll + flash the citation card
 document.addEventListener("click", (e) => {
   const ref = e.target.closest("a.cite-ref");
-  if (!ref) return;
-  e.preventDefault();
-  const n = ref.dataset.cite;
-  const card = document.getElementById(`cite-${n}`);
-  if (card) {
-    card.scrollIntoView({ behavior: "smooth", block: "center" });
-    card.classList.remove("flash");
-    void card.offsetWidth;
-    card.classList.add("flash");
+  if (ref) {
+    e.preventDefault();
+    const n = ref.dataset.cite;
+    const card = document.getElementById(`cite-${n}`);
+    if (card) {
+      card.scrollIntoView({ behavior: "smooth", block: "center" });
+      card.classList.remove("flash");
+      void card.offsetWidth;
+      card.classList.add("flash");
+    }
+    return;
+  }
+
+  const viewBtn = e.target.closest("button.pdf-view");
+  if (viewBtn && typeof window.openPdfViewer === "function") {
+    e.preventDefault();
+    const path = decodeURI(viewBtn.dataset.path || "");
+    const pageRaw = viewBtn.dataset.page || "";
+    const page = pageRaw ? parseInt(pageRaw, 10) : 1;
+    const snippet = viewBtn.dataset.snippet || "";
+    const title = viewBtn.dataset.title || "";
+    const openExternal = viewBtn.dataset.ext ? decodeURI(viewBtn.dataset.ext) : "";
+    window.openPdfViewer({
+      pdfUrl: `/api/pdf?path=${encodeURIComponent(path)}`,
+      page,
+      snippet,
+      title,
+      openExternal,
+    });
   }
 });
 

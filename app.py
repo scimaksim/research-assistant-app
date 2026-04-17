@@ -5,9 +5,9 @@ from typing import Any, Optional
 
 import httpx
 from databricks.sdk import WorkspaceClient
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -278,6 +278,41 @@ def latest() -> dict[str, Any]:
     cols = [c["name"] for c in d.get("manifest", {}).get("schema", {}).get("columns", [])]
     rows = d.get("result", {}).get("data_array", []) or []
     return {"columns": cols, "rows": rows}
+
+
+@app.get("/api/pdf")
+def pdf(path: str = Query(..., description="UC volume path like /Volumes/cat/sch/vol/file.pdf")) -> StreamingResponse:
+    """Stream a PDF from a Unity Catalog volume.
+
+    Restricted to the configured VOLUME_ROOT prefix so the endpoint can't be
+    used as a general file-read proxy.
+    """
+    normalized = path.strip()
+    root = VOLUME_ROOT.rstrip("/")
+    if not normalized.startswith(root + "/") or ".." in normalized:
+        raise HTTPException(status_code=400, detail="path outside of allowed volume root")
+    try:
+        resp = w.files.download(normalized)
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(status_code=404, detail=f"file not found: {e}") from e
+
+    def _iter() -> Any:
+        stream = resp.contents
+        while True:
+            chunk = stream.read(64 * 1024)
+            if not chunk:
+                break
+            yield chunk
+
+    filename = normalized.rsplit("/", 1)[-1]
+    return StreamingResponse(
+        _iter(),
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'inline; filename="{filename}"',
+            "Cache-Control": "private, max-age=300",
+        },
+    )
 
 
 app.mount("/static", StaticFiles(directory="static"), name="static")

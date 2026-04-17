@@ -68,8 +68,38 @@
     </div>
   </div>
 
+  <div id="pdf-overlay" class="compare-overlay" hidden>
+    <div class="compare-backdrop" data-pdf-close="1"></div>
+    <div class="pdf-modal" role="dialog" aria-modal="true" aria-labelledby="pdf-title">
+      <header class="compare-head">
+        <div class="pdf-head-left">
+          <h2 id="pdf-title">Source page</h2>
+          <span id="pdf-subtitle" class="pdf-subtitle"></span>
+        </div>
+        <div class="pdf-head-right">
+          <button id="pdf-prev" class="pdf-ctrl" type="button" aria-label="Previous page">◀</button>
+          <span id="pdf-pageinfo" class="pdf-pageinfo">—</span>
+          <button id="pdf-next" class="pdf-ctrl" type="button" aria-label="Next page">▶</button>
+          <span class="pdf-sep"></span>
+          <button id="pdf-zoom-out" class="pdf-ctrl" type="button" aria-label="Zoom out">−</button>
+          <button id="pdf-zoom-in" class="pdf-ctrl" type="button" aria-label="Zoom in">+</button>
+          <span class="pdf-sep"></span>
+          <a id="pdf-open-ext" class="pdf-ctrl" target="_blank" rel="noreferrer" title="Open in Databricks">↗</a>
+          <button class="compare-close" type="button" data-pdf-close="1" aria-label="Close">✕</button>
+        </div>
+      </header>
+      <div id="pdf-body" class="pdf-body">
+        <div id="pdf-status" class="pdf-status">Loading PDF…</div>
+        <div id="pdf-page" class="pdf-page"></div>
+      </div>
+    </div>
+  </div>
+
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
-  <script src="/static/app.js?v=4"></script>
+  <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@4.7.76/build/pdf.min.mjs" type="module"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/pdfjs-dist@4.7.76/web/pdf_viewer.css" />
+  <script src="/static/pdf_viewer.js?v=5" type="module"></script>
+  <script src="/static/app.js?v=5"></script>
 </body>
 </html>
