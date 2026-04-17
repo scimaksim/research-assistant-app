@@ -114,6 +114,7 @@ def _parse_response(resp: dict[str, Any]) -> dict[str, Any]:
     final_text_parts: list[str] = []
     intermediate_text: list[str] = []
     citations: list[dict[str, Any]] = []
+    tools_called: list[str] = []
     seen = set()
 
     output = resp.get("output") or []
@@ -124,6 +125,11 @@ def _parse_response(resp: dict[str, Any]) -> dict[str, Any]:
         if not isinstance(item, dict):
             continue
         itype = item.get("type")
+        if itype == "function_call":
+            fn_name = item.get("name") or ""
+            if fn_name:
+                tools_called.append(fn_name)
+            continue
         if itype == "message":
             is_final = (idx == message_items[-1][0]) if message_items else False
             content = item.get("content") or []
@@ -171,7 +177,7 @@ def _parse_response(resp: dict[str, Any]) -> dict[str, Any]:
     if not final_text and intermediate_text:
         final_text = intermediate_text[-1]
 
-    return {"answer": final_text, "citations": citations}
+    return {"answer": final_text, "citations": citations, "tools_called": tools_called}
 
 
 @app.get("/api/health")
@@ -210,6 +216,13 @@ def _synthesize_citations_from_answer(answer: str) -> list[dict[str, Any]]:
     return out
 
 
+_KA_TOOL_HINTS = ("content_assistant", "knowledge", "research")
+
+
+def _supervisor_used_ka(tools_called: list[str]) -> bool:
+    return any(any(h in t.lower() for h in _KA_TOOL_HINTS) for t in tools_called)
+
+
 @app.post("/api/chat")
 def chat(req: ChatRequest) -> dict[str, Any]:
     if req.route == "knowledge":
@@ -221,6 +234,22 @@ def chat(req: ChatRequest) -> dict[str, Any]:
     resp = _query_endpoint(endpoint, payload)
     parsed = _parse_response(resp)
     citations = parsed["citations"]
+
+    # Supervisor strips url_citation annotations when it relays the KA's answer.
+    # If it delegated to the Content_Assistant and we got nothing, re-fetch
+    # citations directly from the KA so the UI Sources panel stays populated.
+    if (
+        not citations
+        and endpoint == SUPERVISOR_ENDPOINT
+        and _supervisor_used_ka(parsed.get("tools_called") or [])
+    ):
+        try:
+            ka_resp = _query_endpoint(KA_ENDPOINT, {"input": _build_input(req)})
+            ka_parsed = _parse_response(ka_resp)
+            citations = ka_parsed["citations"]
+        except HTTPException:
+            citations = []
+
     if not citations:
         citations = _synthesize_citations_from_answer(parsed["answer"])
     return {"answer": parsed["answer"], "citations": citations, "endpoint": endpoint}
