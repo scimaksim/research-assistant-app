@@ -341,9 +341,9 @@ main {
   overflow: hidden;
   opacity: 1;
   line-height: 1;
-  mix-blend-mode: multiply;
 }
-.pdf-page .textLayer > span {
+.pdf-page .textLayer > span,
+.pdf-page .textLayer > div {
   color: transparent;
   position: absolute;
   white-space: pre;
@@ -351,11 +351,11 @@ main {
   transform-origin: 0% 0%;
 }
 .pdf-page .textLayer mark.pdf-hl {
-  background: rgba(255, 210, 50, 0.55);
+  background: rgba(255, 210, 50, 0.6);
   color: transparent;
   border-radius: 2px;
   padding: 0;
-  box-shadow: 0 0 0 1px rgba(255, 170, 20, 0.6);
+  box-shadow: 0 0 0 1px rgba(255, 170, 20, 0.85);
 }
 .pdf-page .textLayer ::selection { background: rgba(106,164,255,0.4); }
 

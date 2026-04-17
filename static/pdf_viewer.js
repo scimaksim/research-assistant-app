@@ -69,17 +69,23 @@ function pickHighlightTerms(snippet) {
 }
 
 function highlightTextLayer(container, terms) {
-  if (!terms.length) return;
+  if (!terms.length) return 0;
   const escaped = terms
     .map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
     .sort((a, b) => b.length - a.length);
   const pattern = new RegExp(`(${escaped.join("|")})`, "gi");
 
-  const spans = container.querySelectorAll("span");
-  spans.forEach((span) => {
-    const text = span.textContent;
-    if (!text || !pattern.test(text)) return;
+  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
+  const targets = [];
+  let node;
+  while ((node = walker.nextNode())) {
+    if (node.nodeValue && pattern.test(node.nodeValue)) targets.push(node);
     pattern.lastIndex = 0;
+  }
+
+  let hits = 0;
+  targets.forEach((textNode) => {
+    const text = textNode.nodeValue;
     const frag = document.createDocumentFragment();
     let last = 0;
     text.replace(pattern, (match, _g, idx) => {
@@ -89,11 +95,13 @@ function highlightTextLayer(container, terms) {
       mark.textContent = match;
       frag.appendChild(mark);
       last = idx + match.length;
+      hits += 1;
       return match;
     });
     if (last < text.length) frag.appendChild(document.createTextNode(text.slice(last)));
-    span.replaceChildren(frag);
+    textNode.parentNode.replaceChild(frag, textNode);
   });
+  return hits;
 }
 
 async function renderPage() {
@@ -154,11 +162,15 @@ async function renderPage() {
   }).promise;
 
   const terms = pickHighlightTerms(currentHighlight);
-  highlightTextLayer(textLayer, terms);
+  const hits = highlightTextLayer(textLayer, terms);
 
   setStatus("", false);
   const firstHl = textLayer.querySelector(".pdf-hl");
-  if (firstHl) firstHl.scrollIntoView({ block: "center", behavior: "smooth" });
+  if (firstHl) {
+    firstHl.scrollIntoView({ block: "center", behavior: "smooth" });
+  } else if (terms.length && !hits) {
+    console.warn("No PDF highlight matches on page", currentPage, "for terms", terms);
+  }
 }
 
 async function openPdfViewer({ pdfUrl, page, snippet, title, openExternal }) {

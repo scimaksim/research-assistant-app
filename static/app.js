@@ -18,6 +18,14 @@ function escapeHtml(s) {
     .replace(/>/g, "&gt;");
 }
 
+function cleanSnippet(s) {
+  return String(s || "")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 const STOPWORDS = new Set([
   "what","which","where","when","does","their","there","have","with","this","that","from","about","into","over","under","some","most","many","than","then","only","also","will","would","could","should","been","were","they","your","yours","latest","newest","recent","summary","summarize","please","outlook","tell","give","show","value","values","number","numbers","report","reports",
 ]);
@@ -66,13 +74,14 @@ function buildCitationCard(c, num, userQuery) {
   const synthTag = c.synthesized ? '<span class="synth-tag" title="Extracted from answer text">inferred</span>' : "";
   const pdfHref = c.volume_url || c.doc_uri;
   const proxyPath = c.doc_uri || "";
+  const cleanSnip = cleanSnippet(c.snippet);
   const viewBtn = proxyPath && !c.synthesized
-    ? `<button class="pdf-view" type="button" data-path="${encodeURI(proxyPath)}" data-page="${c.page != null ? escapeHtml(c.page) : ""}" data-snippet="${escapeHtml(c.snippet || "")}" data-title="${escapeHtml(reportTitle(c))}" data-ext="${pdfHref ? encodeURI(pdfHref) : ""}">View page</button>`
+    ? `<button class="pdf-view" type="button" data-path="${encodeURI(proxyPath)}" data-page="${c.page != null ? escapeHtml(c.page) : ""}" data-snippet="${escapeHtml(cleanSnip)}" data-title="${escapeHtml(reportTitle(c))}" data-ext="${pdfHref ? encodeURI(pdfHref) : ""}">View page</button>`
     : "";
   const pdfLink = pdfHref
     ? `<a class="pdf-link" href="${encodeURI(pdfHref)}" target="_blank" rel="noreferrer">Open in Databricks${c.page != null ? ` at page ${escapeHtml(c.page)}` : ""} ↗</a>`
     : "";
-  const snippet = highlight(c.snippet || "", userQuery);
+  const snippet = highlight(cleanSnip, userQuery);
   const bodyHtml = c.synthesized
     ? `<div class="snippet"><em>Referenced in the answer. No retrieval snippet — this answer came from the metadata route (Genie). Open the PDF to read the full report.</em></div>`
     : `<div>${pageTag}${secTag}</div><div class="snippet">${snippet || "<em>(no snippet)</em>"}</div>`;
@@ -143,7 +152,7 @@ function renderSourceStrip(cits) {
     if (c.synthesized || !c.doc_uri) {
       return `<span class="src-pill" data-cite="${num}">${inner}</span>`;
     }
-    return `<button type="button" class="src-pill" data-cite="${num}" data-path="${encodeURI(c.doc_uri)}" data-page="${c.page != null ? escapeHtml(c.page) : ""}" data-snippet="${escapeHtml(c.snippet || "")}" data-title="${escapeHtml(title)}" data-ext="${c.volume_url ? encodeURI(c.volume_url) : ""}">${inner}</button>`;
+    return `<button type="button" class="src-pill" data-cite="${num}" data-path="${encodeURI(c.doc_uri)}" data-page="${c.page != null ? escapeHtml(c.page) : ""}" data-snippet="${escapeHtml(cleanSnippet(c.snippet))}" data-title="${escapeHtml(title)}" data-ext="${c.volume_url ? encodeURI(c.volume_url) : ""}">${inner}</button>`;
   }).join("");
   return `<div class="source-strip"><span class="src-label">Source${cits.length > 1 ? "s" : ""}:</span>${pills}</div>`;
 }
