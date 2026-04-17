@@ -65,7 +65,7 @@ This uploads to the volume and kicks off the `research-assistant-reindex` job, w
 
 ## Evaluate retrieval quality
 
-**UI path (recommended for iteration):** open the Vector Search index that backs the KA in the Databricks UI and click **Evaluate search quality**. Databricks samples docs, LLM-generates queries, and reports DCG@10, NDCG, Recall/Precision, MRR, MAP. See [Retrieval quality eval](https://docs.databricks.com/aws/en/vector-search/retrieval-quality-eval).
+**UI path (recommended for iteration):** the KA is backed by a managed Delta Sync Vector Search index (visible under your KA's VS endpoint, usually named `ka-{id}-vs-endpoint`). Open the DELTA_SYNC index in the Databricks UI and click **Evaluate search quality** — Databricks samples docs, LLM-generates queries, and reports DCG@10, NDCG, Recall/Precision, MRR, MAP. See [Retrieval quality eval](https://docs.databricks.com/aws/en/vector-search/retrieval-quality-eval).
 
 **Programmatic path (runs in CI):**
 

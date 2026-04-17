@@ -1,28 +1,29 @@
-# Curated retrieval eval. Add one entry per golden-path question.
-# question       : the user prompt sent to the endpoint
-# route          : "knowledge" or "supervisor"
-# expect_doc_ids : report_ids that SHOULD appear in citations
-# expect_substrings : text that SHOULD appear in the answer
+# Curated retrieval eval.
+#
+# Populate with golden-path questions and expected citations / answer substrings.
+# Keep expectations minimal and specific (one or two facts per question) so the
+# coverage metric reflects retrieval quality rather than answer verbosity.
+#
+# Fields:
+#   question          - prompt sent to the endpoint
+#   route             - "knowledge" (direct KA) or "supervisor"
+#   expect_doc_ids    - list of report_ids that SHOULD be cited
+#   expect_substrings - list of strings that SHOULD appear in the answer
 
 - question: "What is the latest report?"
   route: supervisor
   expect_doc_ids: []
-  expect_substrings:
-    - "2025"
+  expect_substrings: ["2025"]
 
-- question: "Show me reports published this week"
+- question: "Show reports by primary author"
   route: supervisor
   expect_doc_ids: []
   expect_substrings: []
 
-- question: "List reports by author"
-  route: supervisor
-  expect_doc_ids: []
-  expect_substrings: []
-
-# Add content-question rows tailored to your corpus, e.g.:
+# Example content questions — replace with queries specific to YOUR corpus.
+# The pattern is: one specific number, one specific phrase, one doc_id.
 #
-# - question: "What's the current forecast for X?"
+# - question: "What is the Q3 revenue forecast?"
 #   route: knowledge
-#   expect_doc_ids: ["{report_id}"]
-#   expect_substrings: ["{expected number}", "{expected phrase}"]
+#   expect_doc_ids: ["REPORT_XYZ"]
+#   expect_substrings: ["$42bn", "Q3"]
