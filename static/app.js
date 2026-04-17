@@ -120,10 +120,28 @@ function renderAnswer(text) {
   return clean.replace(/\[(\d+)\]/g, (match, num) => {
     const n = parseInt(num, 10);
     if (n >= 1 && n <= currentCitations.length) {
-      return `<a class="cite-ref" href="#cite-${n}" data-cite="${n}">${n}</a>`;
+      const c = currentCitations[n - 1];
+      const label = reportTitle(c) + (c.page != null ? ` · page ${c.page}` : "");
+      return `<a class="cite-ref" href="#cite-${n}" data-cite="${n}" title="${escapeHtml(label)}">${n}</a>`;
     }
     return match;
   });
+}
+
+function renderSourceStrip(cits) {
+  if (!cits || !cits.length) return "";
+  const pills = cits.map((c, i) => {
+    const num = i + 1;
+    const title = reportTitle(c);
+    const page = c.page != null ? ` · p.${escapeHtml(c.page)}` : "";
+    const href = c.volume_url || c.doc_uri || "";
+    const synth = c.synthesized ? ' <span class="src-synth">inferred</span>' : "";
+    const inner = `<span class="src-num">${num}</span>${escapeHtml(title)}${page}${synth}`;
+    return href
+      ? `<a class="src-pill" href="${encodeURI(href)}" target="_blank" rel="noreferrer" data-cite="${num}">${inner}</a>`
+      : `<span class="src-pill" data-cite="${num}">${inner}</span>`;
+  }).join("");
+  return `<div class="source-strip"><span class="src-label">Source${cits.length > 1 ? "s" : ""}:</span>${pills}</div>`;
 }
 
 function renderCitations(cits, userQuery) {
@@ -170,7 +188,7 @@ async function sendMessage(text) {
 
     const cits = data.citations || [];
     currentCitations = cits;
-    const answerHtml = renderAnswer(data.answer || "(no content)");
+    const answerHtml = renderAnswer(data.answer || "(no content)") + renderSourceStrip(cits);
     addBubble("assistant", answerHtml);
     history.push({ role: "assistant", content: data.answer || "" });
     renderCitations(cits, text);
