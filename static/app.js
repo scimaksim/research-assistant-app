@@ -138,12 +138,12 @@ function renderSourceStrip(cits) {
     const num = i + 1;
     const title = reportTitle(c);
     const page = c.page != null ? ` · p.${escapeHtml(c.page)}` : "";
-    const href = c.volume_url || c.doc_uri || "";
     const synth = c.synthesized ? ' <span class="src-synth">inferred</span>' : "";
     const inner = `<span class="src-num">${num}</span>${escapeHtml(title)}${page}${synth}`;
-    return href
-      ? `<a class="src-pill" href="${encodeURI(href)}" target="_blank" rel="noreferrer" data-cite="${num}">${inner}</a>`
-      : `<span class="src-pill" data-cite="${num}">${inner}</span>`;
+    if (c.synthesized || !c.doc_uri) {
+      return `<span class="src-pill" data-cite="${num}">${inner}</span>`;
+    }
+    return `<button type="button" class="src-pill" data-cite="${num}" data-path="${encodeURI(c.doc_uri)}" data-page="${c.page != null ? escapeHtml(c.page) : ""}" data-snippet="${escapeHtml(c.snippet || "")}" data-title="${escapeHtml(title)}" data-ext="${c.volume_url ? encodeURI(c.volume_url) : ""}">${inner}</button>`;
   }).join("");
   return `<div class="source-strip"><span class="src-label">Source${cits.length > 1 ? "s" : ""}:</span>${pills}</div>`;
 }
@@ -244,10 +244,11 @@ document.addEventListener("click", (e) => {
     return;
   }
 
-  const viewBtn = e.target.closest("button.pdf-view");
+  const viewBtn = e.target.closest("button.pdf-view, button.src-pill");
   if (viewBtn && typeof window.openPdfViewer === "function") {
     e.preventDefault();
     const path = decodeURI(viewBtn.dataset.path || "");
+    if (!path) return;
     const pageRaw = viewBtn.dataset.page || "";
     const page = pageRaw ? parseInt(pageRaw, 10) : 1;
     const snippet = viewBtn.dataset.snippet || "";

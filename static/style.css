@@ -556,6 +556,7 @@ main {
   border-radius: 999px;
   padding: 3px 10px 3px 3px;
   font-size: 12px;
+  font-family: inherit;
   text-decoration: none;
   transition: all 0.12s ease;
   max-width: 100%;
@@ -563,6 +564,8 @@ main {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.source-strip button.src-pill { cursor: pointer; }
+.source-strip button.src-pill:hover,
 .source-strip a.src-pill:hover { border-color: var(--accent); color: var(--accent); }
 .source-strip .src-num {
   display: inline-flex;

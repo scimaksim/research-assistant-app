@@ -218,9 +218,25 @@ def _synthesize_citations_from_answer(answer: str) -> list[dict[str, Any]]:
 
 _KA_TOOL_HINTS = ("content_assistant", "knowledge", "research")
 
+# Heuristic markers that the supervisor or its sub-agent hit a transient error
+# and returned an apology instead of a real answer. If we detect this and the
+# KA retry succeeds, we substitute the KA's answer.
+_APOLOGY_MARKERS = (
+    "technical error",
+    "technical issue",
+    "unable to retrieve",
+    "encountered an error",
+    "experienced a technical",
+)
+
 
 def _supervisor_used_ka(tools_called: list[str]) -> bool:
     return any(any(h in t.lower() for h in _KA_TOOL_HINTS) for t in tools_called)
+
+
+def _looks_like_apology(answer: str) -> bool:
+    low = (answer or "").lower()
+    return any(m in low for m in _APOLOGY_MARKERS)
 
 
 @app.post("/api/chat")
@@ -234,25 +250,31 @@ def chat(req: ChatRequest) -> dict[str, Any]:
     resp = _query_endpoint(endpoint, payload)
     parsed = _parse_response(resp)
     citations = parsed["citations"]
+    answer = parsed["answer"]
 
-    # Supervisor strips url_citation annotations when it relays the KA's answer.
-    # If it delegated to the Content_Assistant and we got nothing, re-fetch
-    # citations directly from the KA so the UI Sources panel stays populated.
-    if (
-        not citations
-        and endpoint == SUPERVISOR_ENDPOINT
+    # Supervisor strips url_citation annotations when it relays the KA's answer,
+    # and its sub-agent call can also flake transiently — returning an apology
+    # in place of a real answer. In both cases, retrying the KA directly is
+    # safe and produces the right content.
+    should_retry = (
+        endpoint == SUPERVISOR_ENDPOINT
         and _supervisor_used_ka(parsed.get("tools_called") or [])
-    ):
+        and (not citations or _looks_like_apology(answer))
+    )
+    if should_retry:
         try:
             ka_resp = _query_endpoint(KA_ENDPOINT, {"input": _build_input(req)})
             ka_parsed = _parse_response(ka_resp)
-            citations = ka_parsed["citations"]
+            if ka_parsed["citations"]:
+                citations = ka_parsed["citations"]
+                if _looks_like_apology(answer) and ka_parsed["answer"]:
+                    answer = ka_parsed["answer"]
         except HTTPException:
-            citations = []
+            pass
 
     if not citations:
-        citations = _synthesize_citations_from_answer(parsed["answer"])
-    return {"answer": parsed["answer"], "citations": citations, "endpoint": endpoint}
+        citations = _synthesize_citations_from_answer(answer)
+    return {"answer": answer, "citations": citations, "endpoint": endpoint}
 
 
 @app.get("/api/metadata/latest")
