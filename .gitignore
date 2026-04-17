@@ -9,3 +9,6 @@ venv/
 /tmp/
 .DS_Store
 eval/latest_results.json
+mlruns/
+mlflow.db
+
