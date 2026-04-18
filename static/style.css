@@ -255,7 +255,7 @@ main {
 .pdf-modal {
   position: relative;
   width: min(1200px, 96vw);
-  max-height: 94vh;
+  height: min(94vh, 1000px);   /* explicit height so flex:1 children get allocatable space */
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 14px;
@@ -301,15 +301,26 @@ main {
   background: var(--border);
   margin: 0 4px;
 }
+.pdf-search-banner {
+  margin: 10px 16px 0;
+  padding: 10px 14px;
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.45);
+  border-radius: 6px;
+  color: #f5c77a;
+  font-size: 13px;
+  line-height: 1.5;
+  max-height: 4.2em;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.pdf-search-banner[hidden] { display: none; }
 .pdf-body {
   flex: 1;
-  overflow: auto;
-  background: #0a0d14;
-  padding: 20px;
-  display: flex;
-  justify-content: center;
-  align-items: flex-start;
+  min-height: 0;       /* let flex child shrink so overflow works */
   position: relative;
+  overflow: hidden;
+  background: #0a0d14;
 }
 .pdf-status {
   position: absolute;
@@ -321,43 +332,26 @@ main {
   font-size: 13px;
   pointer-events: none;
   background: rgba(10,13,20,0.7);
+  z-index: 5;
 }
-.pdf-page .pdfPage {
-  position: relative;
+.pdf-viewer-container {
+  position: absolute;
+  inset: 0;
+  overflow: auto;
+  padding: 20px;
+  text-align: center;       /* simple horizontal centering, no flex */
+  background: #0a0d14;
+}
+.pdf-page-img {
+  display: inline-block;    /* participates in text-align centering */
+  max-width: 100%;
+  height: auto;
   background: #fff;
   box-shadow: 0 8px 30px rgba(0,0,0,0.5);
+  border: 1px solid rgba(255,255,255,0.08);
   border-radius: 2px;
+  vertical-align: top;
 }
-.pdf-page canvas {
-  display: block;
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-}
-.pdf-page .textLayer {
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
-  opacity: 1;
-  line-height: 1;
-}
-.pdf-page .textLayer > span,
-.pdf-page .textLayer > div {
-  color: transparent;
-  position: absolute;
-  white-space: pre;
-  cursor: text;
-  transform-origin: 0% 0%;
-}
-.pdf-page .textLayer mark.pdf-hl {
-  background: rgba(255, 210, 50, 0.6);
-  color: transparent;
-  border-radius: 2px;
-  padding: 0;
-  box-shadow: 0 0 0 1px rgba(255, 170, 20, 0.85);
-}
-.pdf-page .textLayer ::selection { background: rgba(106,164,255,0.4); }
 
 /* View page button on each citation card */
 .cite-foot-actions {
@@ -395,14 +389,32 @@ main {
   margin-right: 8px;
 }
 .cite .cite-head {
-  display: flex; align-items: center; gap: 6px;
-  padding: 10px 12px;
+  display: flex; align-items: flex-start; gap: 8px;
+  padding: 12px 14px;
   background: linear-gradient(180deg, rgba(106,164,255,0.07), transparent);
   border-bottom: 1px solid var(--border);
 }
-.cite .cite-head .title { font-weight: 600; flex: 1; }
-.cite .cite-head .meta { color: var(--muted); font-size: 11.5px; }
-.cite .cite-body { padding: 10px 12px; }
+.cite .cite-head .title-block { flex: 1; min-width: 0; }
+.cite .cite-head .title {
+  font-weight: 700;
+  font-size: 14px;
+  line-height: 1.35;
+  color: var(--text);
+  word-wrap: break-word;
+}
+.cite .cite-head .title-meta {
+  margin-top: 4px;
+  font-size: 11.5px;
+  color: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.cite .cite-head .title-meta code {
+  background: transparent;
+  padding: 0;
+  color: var(--accent);
+}
+.cite .cite-body { padding: 10px 14px; }
+.cite .cite-tags { margin-bottom: 6px; }
 .cite .sec-tag {
   display: inline-block;
   background: var(--panel);
@@ -428,12 +440,14 @@ main {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 .cite .snippet {
-  color: var(--text); opacity: 0.95; line-height: 1.55;
+  color: var(--text); opacity: 0.95; line-height: 1.6;
   border-left: 3px solid var(--accent);
-  padding: 8px 10px;
+  padding: 10px 12px;
   background: rgba(106, 164, 255, 0.06);
   border-radius: 4px;
   font-size: 13px;
+  white-space: pre-wrap;
+  word-wrap: break-word;
 }
 .cite .snippet mark {
   background: var(--highlight-strong);
@@ -559,10 +573,13 @@ main {
   font-family: inherit;
   text-decoration: none;
   transition: all 0.12s ease;
-  max-width: 100%;
+  max-width: min(560px, 100%);
+}
+.source-strip .src-pill .src-label-text {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  min-width: 0;
 }
 .source-strip button.src-pill { cursor: pointer; }
 .source-strip button.src-pill:hover,

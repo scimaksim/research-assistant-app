@@ -1,12 +1,19 @@
-import * as pdfjsLib from "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.7.76/build/pdf.min.mjs";
-
-pdfjsLib.GlobalWorkerOptions.workerSrc =
-  "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.7.76/build/pdf.worker.min.mjs";
+// Simple, bulletproof PDF viewer:
+// - Server renders the cited page to a PNG with the snippet highlighted
+//   (pymupdf finds the phrase's bounding boxes and draws an amber highlight
+//   annotation before rasterizing). The client just displays an <img>.
+// - Prev/Next fetches a different page (no snippet highlight on pages
+//   other than the cited one, since the model grounded it specifically).
+// - Zoom in/out re-fetches at a larger/smaller scale.
+//
+// This replaces the previous pdf.js-based viewer, which repeatedly failed
+// to position highlights reliably on table-layout and numeric-dense pages.
 
 const overlay = document.getElementById("pdf-overlay");
-const pageEl = document.getElementById("pdf-page");
+const imgEl = document.getElementById("pdf-page-img");
 const statusEl = document.getElementById("pdf-status");
 const subtitleEl = document.getElementById("pdf-subtitle");
+const searchBanner = document.getElementById("pdf-search-banner");
 const pageInfo = document.getElementById("pdf-pageinfo");
 const prevBtn = document.getElementById("pdf-prev");
 const nextBtn = document.getElementById("pdf-next");
@@ -14,200 +21,123 @@ const zoomIn = document.getElementById("pdf-zoom-in");
 const zoomOut = document.getElementById("pdf-zoom-out");
 const openExt = document.getElementById("pdf-open-ext");
 
-let currentDoc = null;
-let currentPage = 1;
-let currentScale = 1.4;
-let currentHighlight = "";
-let renderTask = null;
+let state = {
+  pdfPath: "",
+  citedPage: 1,
+  currentPage: 1,
+  numPages: 1,
+  snippet: "",
+  scale: 1.6,
+  title: "",
+};
 
-function setStatus(text, visible) {
-  statusEl.textContent = text || "";
-  statusEl.style.display = visible ? "flex" : "none";
+function setStatus(msg, show) {
+  statusEl.textContent = msg || "";
+  statusEl.style.display = show ? "flex" : "none";
 }
 
-function pickHighlightTerms(snippet) {
-  if (!snippet) return [];
-  const cleaned = String(snippet)
-    .replace(/<[^>]+>/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-  const stop = new Set([
-    "the","and","for","with","from","that","this","into","over","their","they",
-    "were","been","have","has","was","are","our","its","but","not","than","then",
-    "will","would","could","should","about","also","more","most","some","these",
-    "those","which","what","where","when","there","here","such","per","via",
-  ]);
-  const tokens = cleaned
-    .split(/\s+/)
-    .map((t) => t.replace(/^[^\w$%.]+|[^\w$%.]+$/g, ""))
-    .filter(Boolean);
-
-  const scored = tokens
-    .map((t) => {
-      const lower = t.toLowerCase();
-      if (stop.has(lower)) return null;
-      let score = 0;
-      if (/^\$?\d[\d.,%]*[a-z]{0,3}$/i.test(t)) score += 6;
-      if (/^\d{4}$/.test(t)) score += 3;
-      if (/^[A-Z]{2,}$/.test(t)) score += 2;
-      if (t.length >= 6) score += 1;
-      if (score === 0 && t.length < 5) return null;
-      return { t, score };
-    })
-    .filter(Boolean);
-
-  const seen = new Set();
-  const out = [];
-  for (const { t } of scored.sort((a, b) => b.score - a.score)) {
-    const lower = t.toLowerCase();
-    if (seen.has(lower)) continue;
-    seen.add(lower);
-    out.push(t);
-    if (out.length >= 8) break;
-  }
-  return out;
+function updatePageInfo() {
+  pageInfo.textContent = `${state.currentPage} / ${state.numPages}`;
+  prevBtn.disabled = state.currentPage <= 1;
+  nextBtn.disabled = state.currentPage >= state.numPages;
 }
 
-function highlightTextLayer(container, terms) {
-  if (!terms.length) return 0;
-  const escaped = terms
-    .map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
-    .sort((a, b) => b.length - a.length);
-  const pattern = new RegExp(`(${escaped.join("|")})`, "gi");
-
-  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
-  const targets = [];
-  let node;
-  while ((node = walker.nextNode())) {
-    if (node.nodeValue && pattern.test(node.nodeValue)) targets.push(node);
-    pattern.lastIndex = 0;
-  }
-
-  let hits = 0;
-  targets.forEach((textNode) => {
-    const text = textNode.nodeValue;
-    const frag = document.createDocumentFragment();
-    let last = 0;
-    text.replace(pattern, (match, _g, idx) => {
-      if (idx > last) frag.appendChild(document.createTextNode(text.slice(last, idx)));
-      const mark = document.createElement("mark");
-      mark.className = "pdf-hl";
-      mark.textContent = match;
-      frag.appendChild(mark);
-      last = idx + match.length;
-      hits += 1;
-      return match;
-    });
-    if (last < text.length) frag.appendChild(document.createTextNode(text.slice(last)));
-    textNode.parentNode.replaceChild(frag, textNode);
-  });
-  return hits;
-}
-
-async function renderPage() {
-  if (!currentDoc) return;
-  pageInfo.textContent = `${currentPage} / ${currentDoc.numPages}`;
-  prevBtn.disabled = currentPage <= 1;
-  nextBtn.disabled = currentPage >= currentDoc.numPages;
-
-  if (renderTask) {
-    try { renderTask.cancel(); } catch {}
-    renderTask = null;
-  }
-  setStatus("Rendering page…", true);
-  pageEl.innerHTML = "";
-
-  const page = await currentDoc.getPage(currentPage);
-  const viewport = page.getViewport({ scale: currentScale });
-
-  const canvas = document.createElement("canvas");
-  const ctx = canvas.getContext("2d");
-  const dpr = window.devicePixelRatio || 1;
-  canvas.width = viewport.width * dpr;
-  canvas.height = viewport.height * dpr;
-  canvas.style.width = `${viewport.width}px`;
-  canvas.style.height = `${viewport.height}px`;
-
-  const wrap = document.createElement("div");
-  wrap.className = "pdfPage";
-  wrap.style.width = `${viewport.width}px`;
-  wrap.style.height = `${viewport.height}px`;
-  wrap.appendChild(canvas);
-
-  const textLayer = document.createElement("div");
-  textLayer.className = "textLayer";
-  textLayer.style.width = `${viewport.width}px`;
-  textLayer.style.height = `${viewport.height}px`;
-  wrap.appendChild(textLayer);
-  pageEl.appendChild(wrap);
-
-  renderTask = page.render({
-    canvasContext: ctx,
-    viewport: page.getViewport({ scale: currentScale * dpr }),
-    transform: null,
-  });
-  try {
-    await renderTask.promise;
-  } catch (e) {
-    if (e?.name !== "RenderingCancelledException") throw e;
+async function renderCurrent() {
+  if (!state.pdfPath) {
+    setStatus("No PDF path", true);
     return;
   }
-
-  const textContent = await page.getTextContent();
-  await pdfjsLib.renderTextLayer({
-    textContentSource: textContent,
-    container: textLayer,
-    viewport,
-    textDivs: [],
-  }).promise;
-
-  const terms = pickHighlightTerms(currentHighlight);
-  const hits = highlightTextLayer(textLayer, terms);
-
-  setStatus("", false);
-  const firstHl = textLayer.querySelector(".pdf-hl");
-  if (firstHl) {
-    firstHl.scrollIntoView({ block: "center", behavior: "smooth" });
-  } else if (terms.length && !hits) {
-    console.warn("No PDF highlight matches on page", currentPage, "for terms", terms);
+  setStatus("Loading page…", true);
+  const params = new URLSearchParams({
+    path: state.pdfPath,
+    page: String(state.currentPage),
+    scale: String(state.scale),
+  });
+  // Only pass the snippet when we're on the page the model actually cited —
+  // showing a phantom highlight while the user flips through unrelated pages
+  // would be misleading.
+  if (state.currentPage === state.citedPage && state.snippet) {
+    params.set("snippet", state.snippet);
   }
+  const fetchUrl = `/api/pdf-render?${params.toString()}`;
+  console.log("[pdf-viewer] src ->", fetchUrl);
+
+  // One HEAD-ish fetch to learn the total page count from headers (this was
+  // the only reason we previously used fetch()+blob). Cached response on the
+  // server, and the browser will reuse it for the <img> request thanks to
+  // HTTP caching, so it's not a wasteful duplicate request.
+  try {
+    const res = await fetch(fetchUrl, { credentials: "include", method: "HEAD" });
+    const numPagesHdr = parseInt(res.headers.get("X-Pdf-Num-Pages") || "0", 10);
+    if (numPagesHdr > 0) state.numPages = numPagesHdr;
+  } catch (e) {
+    console.warn("[pdf-viewer] HEAD failed, continuing without num-pages update", e);
+  }
+
+  imgEl.onload = () => {
+    console.log("[pdf-viewer] img loaded", imgEl.naturalWidth, "x", imgEl.naturalHeight, "| bbox:", imgEl.getBoundingClientRect());
+    setStatus("", false);
+  };
+  imgEl.onerror = (ev) => {
+    console.error("[pdf-viewer] img error", ev);
+    setStatus("Failed to load page image", true);
+  };
+  imgEl.src = fetchUrl;
+  updatePageInfo();
 }
 
-async function openPdfViewer({ pdfUrl, page, snippet, title, openExternal }) {
+async function openPdfViewer({ pdfUrl, page, snippet, title, openExternal, pdfPath }) {
+  // Accept either an explicit volume path or derive it from the /api/pdf URL
+  // we were using before the server-render switch.
+  let path = pdfPath || "";
+  if (!path && pdfUrl) {
+    try {
+      const u = new URL(pdfUrl, window.location.origin);
+      path = u.searchParams.get("path") || "";
+    } catch {
+      path = "";
+    }
+  }
+
   overlay.hidden = false;
   document.body.style.overflow = "hidden";
-  subtitleEl.textContent = title ? `${title}${page ? ` · page ${page}` : ""}` : "";
+
+  state.pdfPath = path;
+  state.citedPage = Math.max(1, parseInt(page, 10) || 1);
+  state.currentPage = state.citedPage;
+  state.snippet = snippet || "";
+  state.scale = 1.6;
+  state.numPages = 1;
+  state.title = title || "";
+
+  subtitleEl.textContent = state.title
+    ? `${state.title}${state.citedPage ? ` · page ${state.citedPage}` : ""}`
+    : "";
   openExt.href = openExternal || "#";
   openExt.style.display = openExternal ? "inline-flex" : "none";
-  setStatus("Loading PDF…", true);
-  pageEl.innerHTML = "";
-  currentPage = page || 1;
-  currentScale = 1.4;
-  currentHighlight = snippet || "";
 
-  try {
-    const task = pdfjsLib.getDocument({ url: pdfUrl, withCredentials: true });
-    currentDoc = await task.promise;
-    if (currentPage < 1) currentPage = 1;
-    if (currentPage > currentDoc.numPages) currentPage = currentDoc.numPages;
-    await renderPage();
-  } catch (e) {
-    setStatus(`Failed to load PDF: ${e.message || e}`, true);
+  if (state.snippet) {
+    searchBanner.textContent = `Highlighted passage from the model's citation`;
+    searchBanner.hidden = false;
+  } else {
+    searchBanner.hidden = true;
   }
+  pageInfo.textContent = "—";
+  prevBtn.disabled = true;
+  nextBtn.disabled = true;
+  imgEl.removeAttribute("src");
+
+  await renderCurrent();
 }
 
 function closePdfViewer() {
   overlay.hidden = true;
   document.body.style.overflow = "";
-  if (renderTask) {
-    try { renderTask.cancel(); } catch {}
-    renderTask = null;
+  if (imgEl.dataset.blobUrl) {
+    URL.revokeObjectURL(imgEl.dataset.blobUrl);
+    delete imgEl.dataset.blobUrl;
   }
-  if (currentDoc) {
-    try { currentDoc.destroy(); } catch {}
-    currentDoc = null;
-  }
-  pageEl.innerHTML = "";
+  imgEl.removeAttribute("src");
 }
 
 overlay.addEventListener("click", (e) => {
@@ -220,18 +150,24 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "ArrowRight") nextBtn.click();
 });
 prevBtn.addEventListener("click", () => {
-  if (currentDoc && currentPage > 1) { currentPage -= 1; renderPage(); }
+  if (state.currentPage > 1) {
+    state.currentPage -= 1;
+    renderCurrent();
+  }
 });
 nextBtn.addEventListener("click", () => {
-  if (currentDoc && currentPage < currentDoc.numPages) { currentPage += 1; renderPage(); }
+  if (state.currentPage < state.numPages) {
+    state.currentPage += 1;
+    renderCurrent();
+  }
 });
 zoomIn.addEventListener("click", () => {
-  currentScale = Math.min(currentScale + 0.2, 3.0);
-  renderPage();
+  state.scale = Math.min(3.0, state.scale + 0.25);
+  renderCurrent();
 });
 zoomOut.addEventListener("click", () => {
-  currentScale = Math.max(currentScale - 0.2, 0.6);
-  renderPage();
+  state.scale = Math.max(0.75, state.scale - 0.25);
+  renderCurrent();
 });
 
 window.openPdfViewer = openPdfViewer;

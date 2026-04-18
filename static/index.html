@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Research Assistant</title>
-  <link rel="stylesheet" href="/static/style.css?v=4" />
+  <link rel="stylesheet" href="/static/style.css?v=22" />
 </head>
 <body>
   <header>
@@ -88,18 +88,19 @@
           <button class="compare-close" type="button" data-pdf-close="1" aria-label="Close">✕</button>
         </div>
       </header>
+      <div id="pdf-search-banner" class="pdf-search-banner" hidden></div>
       <div id="pdf-body" class="pdf-body">
         <div id="pdf-status" class="pdf-status">Loading PDF…</div>
-        <div id="pdf-page" class="pdf-page"></div>
+        <div id="pdf-viewer-container" class="pdf-viewer-container">
+          <img id="pdf-page-img" class="pdf-page-img" alt="" />
+        </div>
       </div>
     </div>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@4.7.76/build/pdf.min.mjs" type="module"></script>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/pdfjs-dist@4.7.76/web/pdf_viewer.css" />
-  <script src="/static/pdf_viewer.js?v=7" type="module"></script>
-  <script src="/static/app.js?v=7"></script>
+  <script src="/static/pdf_viewer.js?v=22"></script>
+  <script src="/static/app.js?v=22"></script>
 </body>
 </html>

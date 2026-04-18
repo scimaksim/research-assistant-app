@@ -52,6 +52,11 @@ function reportTitle(c) {
   return "Source document";
 }
 
+function sourceLabel(c) {
+  const t = reportTitle(c);
+  return c.report_id ? `${t} (${c.report_id})` : t;
+}
+
 function addBubble(role, html, extraClass = "") {
   const div = document.createElement("div");
   div.className = `bubble ${role} ${extraClass}`.trim();
@@ -75,26 +80,32 @@ function buildCitationCard(c, num, userQuery) {
   const pdfHref = c.volume_url || c.doc_uri;
   const proxyPath = c.doc_uri || "";
   const cleanSnip = cleanSnippet(c.snippet);
-  const viewBtn = proxyPath && !c.synthesized
-    ? `<button class="pdf-view" type="button" data-path="${encodeURI(proxyPath)}" data-page="${c.page != null ? escapeHtml(c.page) : ""}" data-snippet="${escapeHtml(cleanSnip)}" data-title="${escapeHtml(reportTitle(c))}" data-ext="${pdfHref ? encodeURI(pdfHref) : ""}">View page</button>`
+  const viewBtnLabel = c.synthesized ? "Open PDF" : "View page";
+  const viewBtnSnippet = c.synthesized ? "" : cleanSnip;
+  const viewBtn = proxyPath
+    ? `<button class="pdf-view" type="button" data-path="${encodeURI(proxyPath)}" data-page="${c.page != null ? escapeHtml(c.page) : ""}" data-snippet="${escapeHtml(viewBtnSnippet)}" data-title="${escapeHtml(reportTitle(c))}" data-ext="${pdfHref ? encodeURI(pdfHref) : ""}">${viewBtnLabel}</button>`
     : "";
   const pdfLink = pdfHref
-    ? `<a class="pdf-link" href="${encodeURI(pdfHref)}" target="_blank" rel="noreferrer">Open in Databricks${c.page != null ? ` at page ${escapeHtml(c.page)}` : ""} ↗</a>`
+    ? `<a class="pdf-link" href="${encodeURI(pdfHref)}" target="_blank" rel="noreferrer">Open volume in Databricks ↗</a>`
     : "";
   const snippet = highlight(cleanSnip, userQuery);
+  const secRow = secTag ? `<div class="cite-tags">${secTag}</div>` : "";
   const bodyHtml = c.synthesized
     ? `<div class="snippet"><em>Referenced in the answer. No retrieval snippet — this answer came from the metadata route (Genie). Open the PDF to read the full report.</em></div>`
-    : `<div>${pageTag}${secTag}</div><div class="snippet">${snippet || "<em>(no snippet)</em>"}</div>`;
+    : `${secRow}<div class="snippet">${snippet || "<em>(no snippet)</em>"}</div>`;
   card.innerHTML = `
     <div class="cite-head">
       <span class="num-badge">${num}</span>
-      <div class="title">${escapeHtml(title)}${synthTag}</div>
+      <div class="title-block">
+        <div class="title">${escapeHtml(title)}${synthTag}</div>
+        ${c.report_id ? `<div class="title-meta"><code>${escapeHtml(c.report_id)}</code>${c.page != null ? ` · page ${escapeHtml(c.page)}` : ""}</div>` : ""}
+      </div>
     </div>
     <div class="cite-body">
       ${bodyHtml}
     </div>
     <div class="cite-foot">
-      <span>${c.report_id ? `<code>${escapeHtml(c.report_id)}</code>` : ""}</span>
+      <span></span>
       <span class="cite-foot-actions">${viewBtn}${pdfLink}</span>
     </div>
   `;
@@ -145,14 +156,19 @@ function renderSourceStrip(cits) {
   if (!cits || !cits.length) return "";
   const pills = cits.map((c, i) => {
     const num = i + 1;
-    const title = reportTitle(c);
+    const label = sourceLabel(c);
     const page = c.page != null ? ` · p.${escapeHtml(c.page)}` : "";
     const synth = c.synthesized ? ' <span class="src-synth">inferred</span>' : "";
-    const inner = `<span class="src-num">${num}</span>${escapeHtml(title)}${page}${synth}`;
-    if (c.synthesized || !c.doc_uri) {
-      return `<span class="src-pill" data-cite="${num}">${inner}</span>`;
+    const inner = `<span class="src-num">${num}</span><span class="src-label-text">${escapeHtml(label)}${page}${synth}</span>`;
+    if (!c.doc_uri) {
+      return `<span class="src-pill" data-cite="${num}" title="${escapeHtml(label)}">${inner}</span>`;
     }
-    return `<button type="button" class="src-pill" data-cite="${num}" data-path="${encodeURI(c.doc_uri)}" data-page="${c.page != null ? escapeHtml(c.page) : ""}" data-snippet="${escapeHtml(cleanSnippet(c.snippet))}" data-title="${escapeHtml(title)}" data-ext="${c.volume_url ? encodeURI(c.volume_url) : ""}">${inner}</button>`;
+    // Synthesized citations (from Genie-path answers) don't have page/snippet
+    // grounding, but we still know which PDF to open — let the user click
+    // through to the document rather than a dead span.
+    const snippetAttr = c.synthesized ? "" : escapeHtml(cleanSnippet(c.snippet));
+    const pageAttr = c.page != null ? escapeHtml(c.page) : "";
+    return `<button type="button" class="src-pill" data-cite="${num}" title="${escapeHtml(label)}" data-path="${encodeURI(c.doc_uri)}" data-page="${pageAttr}" data-snippet="${snippetAttr}" data-title="${escapeHtml(reportTitle(c))}" data-ext="${c.volume_url ? encodeURI(c.volume_url) : ""}">${inner}</button>`;
   }).join("");
   return `<div class="source-strip"><span class="src-label">Source${cits.length > 1 ? "s" : ""}:</span>${pills}</div>`;
 }
@@ -237,18 +253,34 @@ inputEl.addEventListener("keydown", (e) => {
   }
 });
 
-// Click a [1] reference in answer -> scroll + flash the citation card
+// Click a [1] reference in answer -> open the PDF viewer straight to the
+// cited page; also flash the sidebar card so it's clear which source was used.
 document.addEventListener("click", (e) => {
   const ref = e.target.closest("a.cite-ref");
   if (ref) {
     e.preventDefault();
-    const n = ref.dataset.cite;
+    const n = parseInt(ref.dataset.cite, 10);
     const card = document.getElementById(`cite-${n}`);
     if (card) {
-      card.scrollIntoView({ behavior: "smooth", block: "center" });
       card.classList.remove("flash");
       void card.offsetWidth;
       card.classList.add("flash");
+    }
+    const c = currentCitations[n - 1];
+    // Open the PDF for ANY citation that has a doc_uri — even synthesized ones
+    // (those come from report_ids in the answer, so we know the file exists
+    // even if we don't have a specific page/snippet to highlight).
+    if (c && c.doc_uri && typeof window.openPdfViewer === "function") {
+      const page = c.page != null ? parseInt(c.page, 10) || 1 : 1;
+      window.openPdfViewer({
+        pdfUrl: `/api/pdf?path=${encodeURIComponent(c.doc_uri)}`,
+        page,
+        snippet: c.synthesized ? "" : cleanSnippet(c.snippet),
+        title: reportTitle(c),
+        openExternal: c.volume_url || "",
+      });
+    } else if (card) {
+      card.scrollIntoView({ behavior: "smooth", block: "center" });
     }
     return;
   }
